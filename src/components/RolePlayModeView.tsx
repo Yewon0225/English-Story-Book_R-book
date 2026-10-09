@@ -19,6 +19,7 @@ import {
   Heart,
   Star,
   Lock,
+  CheckCircle2,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -213,11 +214,23 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
   const [recognizedText, setRecognizedText] = useState<string | null>(null);
   const [warmFeedback, setWarmFeedback] = useState<WarmFeedback | null>(null);
 
+  // Completed lines tracking across the current story
+  const totalStoryLines = pages.reduce((sum, p) => sum + p.lines.length, 0);
+  const [completedLineIds, setCompletedLineIds] = useState<Set<string>>(new Set());
+
+  const completedCount = completedLineIds.size;
+  const remainingCount = Math.max(0, totalStoryLines - completedCount);
+  const progressPercentage =
+    totalStoryLines > 0
+      ? Math.min(100, Math.round((completedCount / totalStoryLines) * 100))
+      : 0;
+
   // References for Media Management
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const voicePlayerRef = useRef<HTMLAudioElement | null>(null);
+  const pageAudioPlayerRef = useRef<HTMLAudioElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const pcmChunksRef = useRef<Float32Array[]>([]);
@@ -239,13 +252,6 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
     myCharacterLines.length > 0
       ? myCharacterLines.map((l) => l.text).join(' ')
       : currentPage.lines[currentPage.lines.length - 1].text;
-
-  // Cleanup all media when unmounting or changing page
-  useEffect(() => {
-    return () => {
-      stopAllMedia();
-    };
-  }, [currentPageIndex]);
 
   const stopAllMedia = () => {
     speechService.stop();
@@ -295,10 +301,116 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
       voicePlayerRef.current = null;
     }
 
+    // Stop other turn page audio
+    if (pageAudioPlayerRef.current) {
+      pageAudioPlayerRef.current.pause();
+    }
+
     setIsRecording(false);
     setIsPlayingMyVoice(false);
     setIsAudioPlaying(false);
   };
+
+  // Play the audio of the page when it is not the user's turn
+  const playOtherTurnAudio = () => {
+    stopAllMedia();
+    setIsAudioPlaying(true);
+
+    let audio = pageAudioPlayerRef.current;
+    if (!audio) {
+      audio = new Audio();
+      pageAudioPlayerRef.current = audio;
+    }
+
+    try {
+      audio.pause();
+    } catch {}
+
+    const audioSrc = currentPage.audioUrl || `/audio/page${currentPage.pageNumber}.mp3`;
+    audio.src = audioSrc;
+    audio.currentTime = 0;
+
+    audio.onplay = () => {
+      setIsAudioPlaying(true);
+    };
+
+    audio.onended = () => {
+      setIsAudioPlaying(false);
+      // Mark current page's lines as completed now that the learner listened to them
+      setCompletedLineIds((prev) => {
+        const next = new Set(prev);
+        currentPage.lines.forEach((l) => next.add(l.id));
+        return next;
+      });
+    };
+
+    audio.onerror = () => {
+      console.warn('Page audio playback failed, falling back to speech synthesis');
+      const fullText = currentPage.lines.map((l) => l.text).join(' ');
+      speechService.speakText({
+        text: fullText,
+        speed: 0.9,
+        onEnd: () => {
+          setIsAudioPlaying(false);
+          setCompletedLineIds((prev) => {
+            const next = new Set(prev);
+            currentPage.lines.forEach((l) => next.add(l.id));
+            return next;
+          });
+        },
+      });
+    };
+
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch((err) => {
+        console.warn('Autoplay prevented or interrupted:', err);
+        setIsAudioPlaying(false);
+      });
+    }
+  };
+
+  const handleToggleOtherTurnAudio = () => {
+    soundEffects.click();
+    if (isAudioPlaying) {
+      if (pageAudioPlayerRef.current) {
+        pageAudioPlayerRef.current.pause();
+      }
+      speechService.stop();
+      setIsAudioPlaying(false);
+    } else {
+      playOtherTurnAudio();
+    }
+  };
+
+  const handleReadLine = (text: string) => {
+    soundEffects.click();
+    stopAllMedia();
+    setIsAudioPlaying(true);
+    speechService.speakText({
+      text,
+      speed: 0.88,
+      onEnd: () => {
+        setIsAudioPlaying(false);
+      },
+    });
+  };
+
+  // Play audio automatically whenever it is NOT the user's turn
+  useEffect(() => {
+    if (!isMyTurn) {
+      playOtherTurnAudio();
+    } else {
+      if (pageAudioPlayerRef.current) {
+        pageAudioPlayerRef.current.pause();
+      }
+      setIsAudioPlaying(false);
+    }
+
+    return () => {
+      stopAllMedia();
+    };
+  }, [currentPageIndex, selectedCharacter]);
 
   const handlePageChange = (newIndex: number) => {
     stopAllMedia();
@@ -311,6 +423,20 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
     setPeekBlur(false);
     setMicErrorMessage(null);
     setRecognizedText(null);
+
+    // If advancing forward, ensure completed lines for current page and preceding pages are recorded
+    if (newIndex > currentPageIndex) {
+      setCompletedLineIds((prev) => {
+        const next = new Set(prev);
+        for (let i = 0; i <= currentPageIndex; i++) {
+          if (pages[i]) {
+            pages[i].lines.forEach((l) => next.add(l.id));
+          }
+        }
+        return next;
+      });
+    }
+
     setCurrentPageIndex(newIndex);
   };
 
@@ -473,6 +599,13 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
           const url = URL.createObjectURL(blob);
           setRecordedAudioUrl(url);
 
+          // Mark current page's lines as completed by the learner
+          setCompletedLineIds((prev) => {
+            const next = new Set(prev);
+            currentPage.lines.forEach((l) => next.add(l.id));
+            return next;
+          });
+
           // Generate gentle warm feedback!
           const feedback = generateWarmFeedback(selectedCharacter);
           setWarmFeedback(feedback);
@@ -614,6 +747,13 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
         const url = URL.createObjectURL(wavBlob);
         setRecordedAudioUrl(url);
 
+        // Mark current page's lines as completed by the learner
+        setCompletedLineIds((prev) => {
+          const next = new Set(prev);
+          currentPage.lines.forEach((l) => next.add(l.id));
+          return next;
+        });
+
         const feedback = generateWarmFeedback(selectedCharacter);
         setWarmFeedback(feedback);
 
@@ -735,6 +875,31 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
             );
           })}
         </div>
+
+        {/* Visual Progress Bar: Lines completed and remaining in current story */}
+        <div className="w-full bg-gradient-to-r from-amber-50 via-amber-100/70 to-orange-50 border border-amber-300/80 rounded-2xl px-2.5 sm:px-3 py-1.5 shadow-2xs">
+          <div className="flex items-center justify-between text-xs sm:text-sm font-fairytale mb-1 gap-1">
+            <div className="flex items-center gap-1.5 text-emerald-800 font-extrabold truncate">
+              <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" />
+              <span>
+                <span className="text-emerald-700">{completedCount}</span> {completedCount === 1 ? 'line' : 'lines'} completed
+              </span>
+            </div>
+            <div className="flex items-center gap-1 text-amber-900 font-bold text-[11px] sm:text-xs shrink-0">
+              <span className="text-amber-700 font-extrabold">{remainingCount}</span>
+              <span>{remainingCount === 1 ? 'line' : 'lines'} remaining</span>
+              <span className="text-slate-400 font-mono text-[10px] ml-0.5">({completedCount}/{totalStoryLines})</span>
+            </div>
+          </div>
+
+          {/* Progress Bar Track */}
+          <div className="relative w-full bg-amber-200/70 h-2 sm:h-2.5 rounded-full overflow-hidden p-0.5 shadow-inner">
+            <div
+              className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-400 rounded-full transition-all duration-500 ease-out shadow-xs"
+              style={{ width: `${progressPercentage}%` }}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Main Scrollable Content: Illustration + Story Card + Feedback (flex-1 min-h-0 overflow-y-auto) */}
@@ -749,8 +914,34 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
 
         {/* Story Text Parchment Box */}
         <div className="w-full bg-white p-3 sm:p-4 rounded-2xl sm:rounded-3xl shadow-xs border-2 border-amber-200/90 relative">
-          {/* Peek Button (if blurred) */}
-          {isMyTurn && (
+          {/* Turn Header: Other character turn indicator OR Peek Button if my turn */}
+          {!isMyTurn ? (
+            <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-amber-100">
+              <div className="flex items-center gap-1.5 text-[11px] sm:text-xs font-bold text-amber-900 bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-200 shadow-2xs">
+                <Volume2 className={`w-3.5 h-3.5 text-amber-600 ${isAudioPlaying ? 'animate-bounce' : ''}`} />
+                <span>
+                  {isAudioPlaying ? "Listening to story audio... 🎧" : "Other character's turn (Listen)"}
+                </span>
+              </div>
+              <button
+                onClick={handleToggleOtherTurnAudio}
+                className="flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-teal-800 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 px-2.5 py-1 rounded-xl border border-teal-200 transition-colors cursor-pointer"
+                title={isAudioPlaying ? 'Pause audio' : 'Play audio'}
+              >
+                {isAudioPlaying ? (
+                  <>
+                    <Pause className="w-3 h-3 text-teal-700" />
+                    <span>Pause</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-3 h-3 fill-teal-700 text-teal-700" />
+                    <span>Play Audio</span>
+                  </>
+                )}
+              </button>
+            </div>
+          ) : (
             <div className="flex justify-end mb-1">
               <button
                 onClick={() => {
@@ -767,26 +958,53 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
 
           {/* Text Lines */}
           <div className="space-y-2">
-            {currentPage.lines.map((line) => {
+            {currentPage.lines.map((line, lineIdx) => {
               const isCharacterLine =
                 line.speaker === selectedCharacter ||
                 line.speakerName?.toLowerCase().includes(selectedCharacter);
 
               const shouldBlur = isCharacterLine && !peekBlur;
+              const isCompleted = completedLineIds.has(line.id);
 
               return (
-                <div key={line.id} className="relative">
-                  <p
-                    className={`text-lg sm:text-xl md:text-2xl font-bold leading-relaxed sm:leading-loose font-fairytale transition-all duration-300 ${
-                      shouldBlur
-                        ? 'filter blur-sm select-none text-pink-600 bg-pink-50/40 p-1.5 rounded-xl border border-dashed border-pink-300'
-                        : isCharacterLine
-                        ? 'text-pink-700 bg-pink-50/60 p-1.5 rounded-xl font-bold border border-pink-200/60'
-                        : 'text-slate-900'
+                <div key={line.id} className="relative flex items-start gap-2">
+                  {/* Line index / completion check badge */}
+                  <span
+                    className={`mt-1 sm:mt-1.5 shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-bold transition-all ${
+                      isCompleted
+                        ? 'bg-emerald-100 text-emerald-700 border border-emerald-300 shadow-2xs'
+                        : 'bg-amber-100/70 text-amber-800/60 border border-amber-200/60'
                     }`}
+                    title={isCompleted ? 'Line completed' : `Line ${lineIdx + 1}`}
                   >
-                    {line.text}
-                  </p>
+                    {isCompleted ? '✓' : lineIdx + 1}
+                  </span>
+
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className={`text-lg sm:text-xl md:text-2xl font-bold leading-relaxed sm:leading-loose font-fairytale transition-all duration-300 ${
+                        shouldBlur
+                          ? 'filter blur-sm select-none text-pink-600 bg-pink-50/40 p-1.5 rounded-xl border border-dashed border-pink-300'
+                          : isCharacterLine
+                          ? 'text-pink-700 bg-pink-50/60 p-1.5 rounded-xl font-bold border border-pink-200/60'
+                          : 'text-slate-900'
+                      }`}
+                    >
+                      {line.text}
+                    </p>
+                  </div>
+
+                  {/* Individual line listen button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleReadLine(line.text);
+                    }}
+                    className="mt-1 sm:mt-1.5 shrink-0 p-1 text-slate-400 hover:text-amber-700 hover:bg-amber-100/80 rounded-lg transition-colors cursor-pointer"
+                    title={`Listen: "${line.text}"`}
+                  >
+                    <Volume2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               );
             })}
@@ -965,35 +1183,74 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
             <span>{currentPageIndex > 0 ? 'Prev' : 'Home'}</span>
           </button>
 
-          {/* Center Actions: Speak / Stop Button & Example Button */}
+          {/* Center Actions: Play Audio (if other's turn) or Speak / Stop (if my turn) */}
           <div className="flex items-center gap-1.5 sm:gap-2">
-            {/* Speak / Stop Button */}
-            {isRecording ? (
-              <button
-                onClick={handleStopRecording}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm shadow-md bg-rose-600 hover:bg-rose-700 text-white animate-pulse active:scale-95 cursor-pointer font-fairytale shrink-0 whitespace-nowrap"
-              >
-                <Square className="w-3.5 h-3.5 fill-white" />
-                <span>Stop ({recordingSeconds}s)</span>
-              </button>
-            ) : (
-              <button
-                onClick={handleStartRecording}
-                className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm shadow-md active:scale-95 transition-all cursor-pointer font-fairytale bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white shrink-0 whitespace-nowrap"
-              >
-                <Mic className="w-3.5 h-3.5" />
-                <span>Speak</span>
-              </button>
-            )}
+            {!isMyTurn ? (
+              <>
+                {/* Audio Playing / Play Audio Button when it is NOT user's turn */}
+                <button
+                  onClick={handleToggleOtherTurnAudio}
+                  className={`flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm shadow-md active:scale-95 transition-all cursor-pointer font-fairytale shrink-0 whitespace-nowrap ${
+                    isAudioPlaying
+                      ? 'bg-amber-500 hover:bg-amber-600 text-white ring-2 ring-amber-300 animate-pulse'
+                      : 'bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white ring-2 ring-emerald-200'
+                  }`}
+                  title={isAudioPlaying ? 'Pause audio' : 'Play story audio'}
+                >
+                  {isAudioPlaying ? (
+                    <>
+                      <Volume2 className="w-3.5 h-3.5 animate-bounce" />
+                      <span>Listening... 🎧</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3.5 h-3.5 fill-white" />
+                      <span>Play Audio 🔊</span>
+                    </>
+                  )}
+                </button>
 
-            {/* Example Audio Button */}
-            <button
-              onClick={handleListenExample}
-              className="flex items-center gap-1 px-2.5 sm:px-3 py-2 sm:py-2.5 bg-white hover:bg-amber-50 text-amber-900 rounded-xl sm:rounded-2xl font-semibold text-xs sm:text-sm border border-amber-300 shadow-xs transition-colors cursor-pointer shrink-0 whitespace-nowrap"
-            >
-              <Volume2 className="w-3.5 h-3.5 text-amber-600" />
-              <span className="font-fairytale">Example</span>
-            </button>
+                {/* Example Audio Button */}
+                <button
+                  onClick={handleListenExample}
+                  className="flex items-center gap-1 px-2.5 sm:px-3 py-2 sm:py-2.5 bg-white hover:bg-amber-50 text-amber-900 rounded-xl sm:rounded-2xl font-semibold text-xs sm:text-sm border border-amber-300 shadow-xs transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+                  title="Hear how the character reads it"
+                >
+                  <Volume2 className="w-3.5 h-3.5 text-amber-600" />
+                  <span className="font-fairytale">Example</span>
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Speak / Stop Button when it IS user's turn */}
+                {isRecording ? (
+                  <button
+                    onClick={handleStopRecording}
+                    className="flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm shadow-md bg-rose-600 hover:bg-rose-700 text-white animate-pulse active:scale-95 cursor-pointer font-fairytale shrink-0 whitespace-nowrap"
+                  >
+                    <Square className="w-3.5 h-3.5 fill-white" />
+                    <span>Stop ({recordingSeconds}s)</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleStartRecording}
+                    className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm shadow-md active:scale-95 transition-all cursor-pointer font-fairytale bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white shrink-0 whitespace-nowrap"
+                  >
+                    <Mic className="w-3.5 h-3.5" />
+                    <span>Speak</span>
+                  </button>
+                )}
+
+                {/* Example Audio Button */}
+                <button
+                  onClick={handleListenExample}
+                  className="flex items-center gap-1 px-2.5 sm:px-3 py-2 sm:py-2.5 bg-white hover:bg-amber-50 text-amber-900 rounded-xl sm:rounded-2xl font-semibold text-xs sm:text-sm border border-amber-300 shadow-xs transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+                >
+                  <Volume2 className="w-3.5 h-3.5 text-amber-600" />
+                  <span className="font-fairytale">Example</span>
+                </button>
+              </>
+            )}
           </div>
 
           {/* Next Button */}
@@ -1003,6 +1260,7 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
               if (isAudioActive) return;
               soundEffects.pageTurn();
               if (isLastPage) {
+                setCompletedLineIds(new Set(pages.flatMap((p) => p.lines.map((l) => l.id))));
                 onFinishRolePlay();
               } else {
                 handlePageChange(currentPageIndex + 1);
