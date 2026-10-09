@@ -310,22 +310,28 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
   };
 
   // Immediate playback of user voice + gentle spoken feedback
+  // Using an existing pre-unlocked Audio element ensures mobile browsers (Safari/Chrome) never block autoplay
   const playUserVoice = (audioUrl: string, feedbackItem?: WarmFeedback | null) => {
-    if (voicePlayerRef.current) {
-      try {
-        voicePlayerRef.current.pause();
-      } catch {}
-      voicePlayerRef.current = null;
+    let audio = voicePlayerRef.current;
+    if (!audio) {
+      audio = new Audio();
+      voicePlayerRef.current = audio;
     }
 
-    const audio = new Audio(audioUrl);
-    voicePlayerRef.current = audio;
+    try {
+      audio.pause();
+    } catch {}
+
+    audio.src = audioUrl;
+    audio.currentTime = 0;
 
     audio.onplay = () => setIsPlayingMyVoice(true);
     audio.onended = () => {
       setIsPlayingMyVoice(false);
       // Soft gentle encouragement right after user's voice finishes playing
-      const praise = (feedbackItem || warmFeedback)?.spokenPraise || 'Wonderful job! You sound amazing!';
+      const praise =
+        (feedbackItem || warmFeedback)?.spokenPraise ||
+        'Wonderful job! You sound amazing!';
       speechService.speakText({
         text: praise,
         speed: 0.9,
@@ -338,10 +344,13 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
       setIsPlayingMyVoice(false);
     };
 
-    audio.play().catch((err) => {
-      console.log('Autoplay deferred by browser policy, ready for tap:', err);
-      setIsPlayingMyVoice(false);
-    });
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch((err) => {
+        console.warn('Audio play attempt notice:', err);
+        setIsPlayingMyVoice(false);
+      });
+    }
   };
 
   // 1. Request microphone permission gracefully and start recording
@@ -350,6 +359,12 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
     stopAllMedia();
     setMicErrorMessage(null);
     setRecognizedText(null);
+
+    // Warm up the Audio element during user touch/click gesture
+    // This primes user-gesture activation so Safari / iOS won't block playback upon stop!
+    if (!voicePlayerRef.current) {
+      voicePlayerRef.current = new Audio();
+    }
 
     // Check mediaDevices support
     if (
@@ -440,8 +455,9 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
       };
 
       recorder.onstop = () => {
+        const chunks = [...audioChunksRef.current];
         const finalMime = recorder.mimeType || mimeType || 'audio/webm';
-        const blob = new Blob(audioChunksRef.current, { type: finalMime });
+        const blob = new Blob(chunks, { type: finalMime });
 
         if (blob.size > 0) {
           const url = URL.createObjectURL(blob);
@@ -461,19 +477,24 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
             });
           } catch {}
 
-          // RIGHT AFTER RECORDING: play user's voice automatically so they can listen to their voice!
+          // RIGHT AFTER RECORDING: play user's voice automatically so they hear themselves speak immediately!
           playUserVoice(url, feedback);
         }
 
-        // Release hardware audio tracks immediately
+        // Release hardware audio tracks cleanly
         if (mediaStreamRef.current) {
-          mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+          mediaStreamRef.current.getTracks().forEach((track) => {
+            try {
+              track.stop();
+            } catch {}
+          });
           mediaStreamRef.current = null;
         }
       };
 
-      // Start recording without timeslice (prevents corrupt MP4 containers in iOS Safari)
-      recorder.start();
+      // Request data slices periodically (every 500ms) so audio chunks are guaranteed
+      // to be captured even if stop() is pressed quickly
+      recorder.start(500);
       setIsRecording(true);
       setRecordingSeconds(0);
 
@@ -529,6 +550,17 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
 
   // 2. Stop recording cleanly without breaking audio streams
   const handleStopRecording = () => {
+    // Prime the audio player synchronously inside the user's touch/click event!
+    // This unlocks browser autoplay policies so playUserVoice can immediately play the blob.
+    if (!voicePlayerRef.current) {
+      voicePlayerRef.current = new Audio();
+    }
+    try {
+      voicePlayerRef.current.play().then(() => {
+        voicePlayerRef.current?.pause();
+      }).catch(() => {});
+    } catch {}
+
     soundEffects.click();
 
     if (recordingTimerRef.current) {
@@ -586,14 +618,22 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
       } finally {
         setIsRecording(false);
         if (mediaStreamRef.current) {
-          mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+          mediaStreamRef.current.getTracks().forEach((t) => {
+            try {
+              t.stop();
+            } catch {}
+          });
           mediaStreamRef.current = null;
         }
       }
     } else {
       setIsRecording(false);
       if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+        mediaStreamRef.current.getTracks().forEach((t) => {
+          try {
+            t.stop();
+          } catch {}
+        });
         mediaStreamRef.current = null;
       }
     }
