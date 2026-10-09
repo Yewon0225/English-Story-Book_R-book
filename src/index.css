@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: #fefce8;
+    color: #1e293b;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+  }
+
+  h1, h2, h3, .font-fairytale {
+    font-family: 'Fredoka', 'Plus Jakarta Sans', cursive, sans-serif;
+  }
+}
+
+/* Custom bounce and wave animations for story characters */
+@keyframes soft-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+
+@keyframes sway {
+  0%, 100% { transform: rotate(-2deg); }
+  50% { transform: rotate(3deg); }
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0) translateX(0); }
+  50% { transform: translateY(-5px) translateX(4px); }
+}
+
+@keyframes fairytale-glow {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.03); }
+}
+
+@keyframes light-mote {
+  0%, 100% { transform: translateY(0) scale(0.9); opacity: 0.3; }
+  50% { transform: translateY(-8px) scale(1.15); opacity: 0.8; }
+}
+
+.animate-soft-bounce {
+  animation: soft-bounce 2.6s ease-in-out infinite;
+}
+
+.animate-sway {
+  transform-origin: top center;
+  animation: sway 3.8s ease-in-out infinite;
+}
+
+.animate-float-slow {
+  animation: float-slow 5s ease-in-out infinite;
+}
+
+.animate-fairytale-glow {
+  animation: fairytale-glow 3s ease-in-out infinite;
+}
+
+.animate-light-mote {
+  animation: light-mote 3.2s ease-in-out infinite;
+}
+
+/* 3D Flashcard flip utilities */
+.perspective-1000 {
+  perspective: 1000px;
+}
+.transform-style-3d {
+  transform-style: preserve-3d;
+}
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}

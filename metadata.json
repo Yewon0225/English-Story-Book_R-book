@@ -1,0 +1,6 @@
+{
+  "name": "R-Book: The Big Red Apple",
+  "description": "Interactive English picture-book reading app for 3rd-4th grade learners featuring Read, Role-play, and Review modes with synchronized audio read-aloud and comprehension questions.",
+  "requestFramePermissions": ["CAMERA_AND_MICROPHONE"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
