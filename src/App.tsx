@@ -35,27 +35,27 @@ export default function App() {
   };
 
   return (
-    <main className="min-h-screen w-full bg-[#fcf8ed] flex flex-col items-center justify-center p-2 sm:p-4 text-slate-800">
-      {/* Mobile/Tablet Picture-Book App Shell */}
-      <div className="w-full max-w-md sm:max-w-lg min-h-[92vh] sm:min-h-[780px] sm:max-h-[880px] bg-[#fffdf7] rounded-3xl shadow-xl border-4 border-amber-200/80 flex flex-col relative overflow-hidden">
+    <main className="min-h-screen h-full w-full bg-[#fcf8ed] flex flex-col items-center justify-center p-0 sm:p-2 md:p-4 text-slate-800 overflow-y-auto sm:overflow-hidden">
+      {/* Mobile/Tablet/Notebook Picture-Book App Shell */}
+      <div className="w-full max-w-md sm:max-w-lg md:max-w-xl h-full sm:h-[860px] max-h-[100dvh] sm:max-h-[96vh] bg-[#fffdf7] rounded-none sm:rounded-3xl shadow-xl sm:border-4 border-amber-200/80 flex flex-col relative overflow-hidden">
         {/* Top App Header with 'R-book' Logo */}
-        <header className="w-full flex items-center justify-center px-4 py-2.5 bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600 text-white shadow-sm z-10 select-none">
+        <header className="w-full shrink-0 flex items-center justify-center px-4 py-2 sm:py-2.5 bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600 text-white shadow-sm z-10 select-none">
           <div
             onClick={handleGoHome}
             className="flex items-center gap-2 cursor-pointer hover:opacity-95 transition-opacity"
             title="R-Book: Home"
           >
-            <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center text-lg shadow-inner">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white/20 flex items-center justify-center text-base sm:text-lg shadow-inner">
               📖
             </div>
-            <span className="text-xl font-black tracking-tight font-fairytale drop-shadow-xs">
+            <span className="text-lg sm:text-xl font-black tracking-tight font-fairytale drop-shadow-xs">
               R-Book
             </span>
           </div>
         </header>
 
         {/* Dynamic Mode Screens */}
-        <div className="flex-1 flex flex-col h-full w-full overflow-hidden">
+        <div className="flex-1 flex flex-col h-full w-full overflow-hidden min-h-0">
           {mode === 'cover' && (
             <CoverScreen onSelectMode={handleSelectMode} />
           )}

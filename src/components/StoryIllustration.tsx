@@ -29,7 +29,7 @@ export const StoryIllustration: React.FC<StoryIllustrationProps> = ({
 
   return (
     <div
-      className={`relative w-full h-full min-h-[220px] max-h-[360px] flex items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-b ${atmosphere.bgGradient} border border-[#eddcb6] transition-all duration-500 ${
+      className={`relative w-full h-full min-h-[160px] sm:min-h-[200px] max-h-[360px] flex items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-b ${atmosphere.bgGradient} border border-[#eddcb6] transition-all duration-500 ${
         isAudioPlaying
           ? 'shadow-[inset_0_0_24px_rgba(245,158,11,0.22),0_0_20px_rgba(251,191,36,0.25)] ring-2 ring-amber-300/60'
           : 'shadow-[inset_0_2px_8px_rgba(180,120,50,0.10)]'

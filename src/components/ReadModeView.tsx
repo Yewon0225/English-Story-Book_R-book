@@ -226,9 +226,9 @@ export const ReadModeView: React.FC<ReadModeViewProps> = ({
     : 0;
 
   return (
-    <div className="flex flex-col justify-between min-h-full w-full max-w-lg mx-auto p-3 sm:p-4 select-none">
-      {/* Top Header Bar */}
-      <div className="flex items-center justify-between py-1 mb-2">
+    <div className="flex flex-col h-full w-full max-w-lg mx-auto p-2 sm:p-3.5 select-none overflow-hidden">
+      {/* Top Header Bar (shrink-0) */}
+      <div className="shrink-0 flex items-center justify-between py-0.5 mb-1">
         <button
           onClick={() => {
             soundEffects.click();
@@ -267,17 +267,21 @@ export const ReadModeView: React.FC<ReadModeViewProps> = ({
 
       {/* Main Content: Illustration & Story Text OR Question Modal */}
       {showQuestion ? (
-        <QuestionModal
-          pageNumber={currentPage.pageNumber}
-          question={currentPage.question}
-          onAnswerCorrect={() => setCorrectAnswersCount((c) => c + 1)}
-          onNextPage={handleNextPageFromQuiz}
-          isLastPage={isLastPage}
-        />
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+          <QuestionModal
+            pageNumber={currentPage.pageNumber}
+            question={currentPage.question}
+            onAnswerCorrect={() => setCorrectAnswersCount((c) => c + 1)}
+            onNextPage={handleNextPageFromQuiz}
+            isLastPage={isLastPage}
+          />
+        </div>
       ) : (
-        <div className="flex flex-col flex-1 justify-between gap-2.5">
-          {/* Top Half: 3D Story Illustration Canvas */}
-          <div className="w-full flex-1 min-h-[225px] max-h-[305px] p-1.5 sm:p-2 rounded-3xl bg-gradient-to-b from-[#fffef8] via-[#fef8e8] to-[#fbedd2] border-2 border-[#edd8b0] shadow-[0_12px_28px_-6px_rgba(180,120,40,0.16),0_4px_10px_rgba(0,0,0,0.04)] transition-all duration-300 relative group">
+        <div className="flex-1 min-h-0 flex flex-col justify-between overflow-hidden">
+          {/* Middle Scrollable Section: Illustration + Story Text + Progress */}
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-2 pr-0.5">
+            {/* Top Half: 3D Story Illustration Canvas */}
+            <div className="w-full h-32 xs:h-36 sm:h-48 md:h-52 shrink-0 p-1 sm:p-1.5 rounded-2xl sm:rounded-3xl bg-gradient-to-b from-[#fffef8] via-[#fef8e8] to-[#fbedd2] border-2 border-[#edd8b0] shadow-sm relative group overflow-hidden flex items-center justify-center">
             <div className="absolute top-1 left-2.5 text-[#d4af37]/50 text-xs select-none pointer-events-none">✦</div>
             <div className="absolute top-1 right-2.5 text-[#d4af37]/50 text-xs select-none pointer-events-none">✦</div>
 
@@ -400,88 +404,92 @@ export const ReadModeView: React.FC<ReadModeViewProps> = ({
             </div>
           </div>
 
-          {/* Bottom Controls Bar: [Previous] [Read / Pause / Replay + Slow] [Next] */}
-          <div className="w-full flex items-center justify-between gap-1.5 sm:gap-2 pt-1 pb-1">
-            {/* 1. Previous Button */}
-            <button
-              onClick={handlePreviousPage}
-              className={`flex items-center gap-1 px-3 sm:px-3.5 py-2.5 rounded-2xl font-bold text-xs sm:text-sm font-fairytale transition-all cursor-pointer shadow-xs active:scale-95 ${
-                currentPageIndex > 0
-                  ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-300'
-              }`}
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>{currentPageIndex > 0 ? 'Prev' : 'Home'}</span>
-            </button>
+          </div>
 
-            {/* 2. Center Audio Controls: 🍎 Read / Pause + 🐢 Slow Toggle */}
-            <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Bottom Controls Bar: Pinned, sticky, fully visible on mobile & tablet (shrink-0) */}
+          <div className="shrink-0 w-full pt-2 pb-1 sm:pb-2 border-t border-amber-200/70 bg-[#fffdf7] z-20">
+            <div className="flex items-center justify-between gap-1 sm:gap-2">
+              {/* 1. Previous Button */}
               <button
-                onClick={handleTogglePlay}
-                className={`flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-2.5 rounded-2xl font-bold text-xs sm:text-sm shadow-md active:scale-95 transition-all cursor-pointer font-fairytale ${
-                  playerState.isPlaying
-                    ? 'bg-amber-500 hover:bg-amber-600 text-white ring-2 ring-amber-300'
-                    : playerState.isPaused
-                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-300'
-                    : 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white'
+                onClick={handlePreviousPage}
+                className={`flex items-center gap-1 px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm font-fairytale transition-all cursor-pointer shadow-xs active:scale-95 shrink-0 whitespace-nowrap ${
+                  currentPageIndex > 0
+                    ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-300'
                 }`}
               >
-                {playerState.isPlaying ? (
-                  <>
-                    <Pause className="w-4 h-4 fill-white" />
-                    <span>Pause</span>
-                  </>
-                ) : playerState.isPaused ? (
-                  <>
-                    <Play className="w-4 h-4 fill-white" />
-                    <span>Resume</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-base sm:text-lg">🍎</span>
-                    <span>Read to me</span>
-                  </>
-                )}
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>{currentPageIndex > 0 ? 'Prev' : 'Home'}</span>
               </button>
 
-              {/* Replay button if paused or finished */}
-              {(playerState.isPaused || (!playerState.isPlaying && playerState.currentTime > 0)) && (
+              {/* 2. Center Audio Controls: 🍎 Read / Pause + 🐢 Slow Toggle */}
+              <div className="flex items-center gap-1 sm:gap-2">
                 <button
-                  onClick={handleReplay}
-                  className="p-2.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-2xl border border-amber-300 transition-colors active:scale-95 cursor-pointer"
-                  title="Replay from start"
+                  onClick={handleTogglePlay}
+                  className={`flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm shadow-md active:scale-95 transition-all cursor-pointer font-fairytale shrink-0 whitespace-nowrap ${
+                    playerState.isPlaying
+                      ? 'bg-amber-500 hover:bg-amber-600 text-white ring-2 ring-amber-300'
+                      : playerState.isPaused
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-300'
+                      : 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white'
+                  }`}
                 >
-                  <RotateCcw className="w-4 h-4" />
+                  {playerState.isPlaying ? (
+                    <>
+                      <Pause className="w-4 h-4 fill-white" />
+                      <span>Pause</span>
+                    </>
+                  ) : playerState.isPaused ? (
+                    <>
+                      <Play className="w-4 h-4 fill-white" />
+                      <span>Resume</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-sm sm:text-base">🍎</span>
+                      <span>Read to me</span>
+                    </>
+                  )}
                 </button>
-              )}
 
-              {/* 🐢 Slow Toggle */}
+                {/* Replay button if paused or finished */}
+                {(playerState.isPaused || (!playerState.isPlaying && playerState.currentTime > 0)) && (
+                  <button
+                    onClick={handleReplay}
+                    className="p-2 sm:p-2.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl sm:rounded-2xl border border-amber-300 transition-colors active:scale-95 cursor-pointer shrink-0"
+                    title="Replay from start"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  </button>
+                )}
+
+                {/* 🐢 Slow Toggle */}
+                <button
+                  onClick={handleToggleSpeed}
+                  className={`flex items-center gap-1 px-2 sm:px-3 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm border transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+                    isSlowSpeed
+                      ? 'bg-amber-100 text-amber-900 border-amber-400 ring-2 ring-amber-300'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>🐢</span>
+                  <span className="font-fairytale">{isSlowSpeed ? 'Slow' : 'Normal'}</span>
+                </button>
+              </div>
+
+              {/* 3. Next Button */}
               <button
-                onClick={handleToggleSpeed}
-                className={`flex items-center gap-1 px-2.5 sm:px-3 py-2.5 rounded-2xl font-bold text-xs sm:text-sm border transition-all cursor-pointer ${
-                  isSlowSpeed
-                    ? 'bg-amber-100 text-amber-900 border-amber-400 ring-2 ring-amber-300'
-                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                onClick={handleNextClick}
+                className={`flex items-center gap-1 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm font-fairytale transition-all duration-200 cursor-pointer shadow-md active:scale-95 shrink-0 whitespace-nowrap ${
+                  hasPlayedAudioOnPage
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-300'
+                    : 'bg-emerald-600/90 hover:bg-emerald-700 text-white'
                 }`}
               >
-                <span>🐢</span>
-                <span className="font-fairytale">{isSlowSpeed ? 'Slow' : 'Normal'}</span>
+                <span>Next</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
-
-            {/* 3. Next Button */}
-            <button
-              onClick={handleNextClick}
-              className={`flex items-center gap-1.5 px-3.5 sm:px-4 py-2.5 rounded-2xl font-bold text-xs sm:text-sm font-fairytale transition-all duration-200 cursor-pointer shadow-md active:scale-95 ${
-                hasPlayedAudioOnPage
-                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-300'
-                  : 'bg-emerald-600/90 hover:bg-emerald-700 text-white'
-              }`}
-            >
-              <span>Next</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
           </div>
         </div>
       )}
