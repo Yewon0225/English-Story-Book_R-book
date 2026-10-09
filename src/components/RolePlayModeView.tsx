@@ -18,6 +18,7 @@ import {
   AlertCircle,
   Heart,
   Star,
+  Lock,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -36,6 +37,9 @@ interface WarmFeedback {
   badge: string;
   spokenPraise: string;
 }
+
+// Silent 1-sample WAV data URI to unlock audio in iOS Safari / Android Chrome during touch gesture
+const SILENT_AUDIO_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
 
 // Convert AudioBuffer PCM samples to standard 16-bit WAV Blob
 // 100% supported by all mobile/tablet browsers (iOS Safari, Android Chrome, Desktop)
@@ -293,6 +297,7 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
 
     setIsRecording(false);
     setIsPlayingMyVoice(false);
+    setIsAudioPlaying(false);
   };
 
   const handlePageChange = (newIndex: number) => {
@@ -327,21 +332,26 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
 
     audio.onplay = () => setIsPlayingMyVoice(true);
     audio.onended = () => {
-      setIsPlayingMyVoice(false);
-      // Soft gentle encouragement right after user's voice finishes playing
-      const praise =
-        (feedbackItem || warmFeedback)?.spokenPraise ||
-        'Wonderful job! You sound amazing!';
-      speechService.speakText({
-        text: praise,
-        speed: 0.9,
-        pitch: 1.15,
-      });
-    };
+       setIsPlayingMyVoice(false);
+       // Soft gentle encouragement right after user's voice finishes playing
+       const praise =
+         (feedbackItem || warmFeedback)?.spokenPraise ||
+         'Wonderful job! You sound amazing!';
+       setIsAudioPlaying(true);
+       speechService.speakText({
+         text: praise,
+         speed: 0.9,
+         pitch: 1.15,
+         onEnd: () => {
+           setIsAudioPlaying(false);
+         },
+       });
+     };
     audio.onpause = () => setIsPlayingMyVoice(false);
     audio.onerror = (e) => {
       console.warn('Recorded audio playback error:', e);
       setIsPlayingMyVoice(false);
+      setIsAudioPlaying(false);
     };
 
     const playPromise = audio.play();
@@ -551,14 +561,15 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
   // 2. Stop recording cleanly without breaking audio streams
   const handleStopRecording = () => {
     // Prime the audio player synchronously inside the user's touch/click event!
-    // This unlocks browser autoplay policies so playUserVoice can immediately play the blob.
+    // Playing a silent 1-sample audio unlocks browser autoplay policies on iOS Safari / Android
+    // so playUserVoice can immediately play the blob URL as soon as onstop completes.
     if (!voicePlayerRef.current) {
       voicePlayerRef.current = new Audio();
     }
     try {
-      voicePlayerRef.current.play().then(() => {
-        voicePlayerRef.current?.pause();
-      }).catch(() => {});
+      const player = voicePlayerRef.current;
+      player.src = SILENT_AUDIO_URI;
+      player.play().catch(() => {});
     } catch {}
 
     soundEffects.click();
@@ -672,6 +683,7 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
   };
 
   const currentChar = CHARACTERS[selectedCharacter];
+  const isAudioActive = isAudioPlaying || isPlayingMyVoice || isRecording;
 
   return (
     <div className="flex flex-col h-full w-full max-w-lg mx-auto p-2 sm:p-3.5 select-none overflow-hidden">
@@ -986,7 +998,9 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
 
           {/* Next Button */}
           <button
+            disabled={isAudioActive}
             onClick={() => {
+              if (isAudioActive) return;
               soundEffects.pageTurn();
               if (isLastPage) {
                 onFinishRolePlay();
@@ -994,8 +1008,14 @@ export const RolePlayModeView: React.FC<RolePlayModeViewProps> = ({
                 handlePageChange(currentPageIndex + 1);
               }
             }}
-            className="flex items-center gap-1 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm font-fairytale transition-all duration-200 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white shadow-md cursor-pointer ring-2 ring-purple-300 shrink-0 whitespace-nowrap"
+            className={`flex items-center gap-1 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm font-fairytale transition-all duration-200 shrink-0 whitespace-nowrap ${
+              isAudioActive
+                ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed shadow-none'
+                : 'bg-purple-600 hover:bg-purple-700 active:scale-95 text-white shadow-md cursor-pointer ring-2 ring-purple-300'
+            }`}
+            title={isAudioActive ? 'Please wait until the audio finishes playing' : isLastPage ? 'Finish' : 'Next'}
           >
+            {isAudioActive && <Lock className="w-3.5 h-3.5 text-slate-400 mr-0.5" />}
             <span>{isLastPage ? 'Finish' : 'Next'}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>

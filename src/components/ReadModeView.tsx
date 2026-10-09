@@ -109,6 +109,9 @@ export const ReadModeView: React.FC<ReadModeViewProps> = ({
 
     storyAudioPlayer.setPlaybackRate(isSlowSpeed ? 0.7 : 1.0);
 
+    // Auto-play page audio smoothly
+    storyAudioPlayer.play().catch(() => {});
+
     const unsubscribe = storyAudioPlayer.subscribe((state) => {
       setPlayerState({ ...state });
     });
@@ -148,6 +151,7 @@ export const ReadModeView: React.FC<ReadModeViewProps> = ({
 
   const handleReplay = () => {
     soundEffects.click();
+    setHasPlayedAudioOnPage(false);
     storyAudioPlayer.seek(0);
     storyAudioPlayer.play();
   };
@@ -158,6 +162,9 @@ export const ReadModeView: React.FC<ReadModeViewProps> = ({
     const clickX = e.clientX - rect.left;
     const ratio = Math.max(0, Math.min(1, clickX / rect.width));
     const targetSeconds = ratio * (playerState.duration || 5.0);
+    if (targetSeconds < (playerState.duration || 5.0) - 0.5) {
+      setHasPlayedAudioOnPage(false);
+    }
     soundEffects.click();
     storyAudioPlayer.seek(targetSeconds);
   };
@@ -171,7 +178,10 @@ export const ReadModeView: React.FC<ReadModeViewProps> = ({
     }
   };
 
+  const isNextActive = hasPlayedAudioOnPage && !playerState.isPlaying;
+
   const handleNextClick = () => {
+    if (!isNextActive) return;
     soundEffects.pageTurn();
     storyAudioPlayer.stop();
     setShowQuestion(true);
@@ -479,13 +489,16 @@ export const ReadModeView: React.FC<ReadModeViewProps> = ({
 
               {/* 3. Next Button */}
               <button
+                disabled={!isNextActive}
                 onClick={handleNextClick}
-                className={`flex items-center gap-1 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm font-fairytale transition-all duration-200 cursor-pointer shadow-md active:scale-95 shrink-0 whitespace-nowrap ${
-                  hasPlayedAudioOnPage
-                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-300'
-                    : 'bg-emerald-600/90 hover:bg-emerald-700 text-white'
+                className={`flex items-center gap-1 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm font-fairytale transition-all duration-200 shrink-0 whitespace-nowrap ${
+                  isNextActive
+                    ? 'bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white ring-2 ring-emerald-300 shadow-md cursor-pointer'
+                    : 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed shadow-none'
                 }`}
+                title={!hasPlayedAudioOnPage ? 'Listen to the audio first' : playerState.isPlaying ? 'Audio is currently playing' : 'Next'}
               >
+                {!isNextActive && <Lock className="w-3.5 h-3.5 text-slate-400 mr-0.5" />}
                 <span>Next</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>

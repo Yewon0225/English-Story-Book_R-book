@@ -40,17 +40,19 @@ export const QuestionModal: React.FC<QuestionModalProps> = ({
     setHasAttempted(true);
 
     if (choice.isCorrect) {
-      setStatus('correct');
-      soundEffects.correct();
-      try {
-        confetti({
-          particleCount: 50,
-          spread: 60,
-          origin: { y: 0.6 },
-          colors: ['#22c55e', '#f59e0b', '#ec4899', '#38bdf8'],
-        });
-      } catch {}
-      onAnswerCorrect();
+      if (status !== 'correct') {
+        setStatus('correct');
+        soundEffects.correct();
+        try {
+          confetti({
+            particleCount: 50,
+            spread: 60,
+            origin: { y: 0.6 },
+            colors: ['#22c55e', '#f59e0b', '#ec4899', '#38bdf8'],
+          });
+        } catch {}
+        onAnswerCorrect();
+      }
     } else {
       setStatus('incorrect');
       soundEffects.nudge();
@@ -152,10 +154,6 @@ export const QuestionModal: React.FC<QuestionModalProps> = ({
                 cardStyle =
                   'bg-rose-100 border-rose-400 text-rose-950 shadow-md ring-2 ring-rose-300';
               }
-            } else if (status === 'incorrect' && isCorrectOption) {
-              // Highlight the correct answer gently after an incorrect attempt
-              cardStyle =
-                'bg-emerald-50 border-emerald-400 text-emerald-900 ring-1 ring-emerald-300';
             }
 
             return (
@@ -200,11 +198,16 @@ export const QuestionModal: React.FC<QuestionModalProps> = ({
         {/* Action Button: Visible after learner has selected an option */}
         {hasAttempted && (
           <button
+            disabled={isPlayingAudio}
             onClick={() => {
               soundEffects.pageTurn();
               onNextPage();
             }}
-            className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold rounded-2xl shadow-md transition-all cursor-pointer font-fairytale text-base"
+            className={`w-full flex items-center justify-center gap-2 py-3 px-4 font-bold rounded-2xl shadow-md transition-all font-fairytale text-base ${
+              isPlayingAudio
+                ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
+                : 'bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white cursor-pointer'
+            }`}
           >
             <span>{isLastPage ? 'See Story Result! 🌟' : 'Next Story Page ▶'}</span>
             <ArrowRight className="w-4 h-4" />
